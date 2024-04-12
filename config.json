@@ -1,0 +1,19 @@
+{
+  "sites": [
+    {
+      "url": "https://github.com/fastfire/deepdarkCTI/blob/main/telegram_threat_actors.md",
+      "selector": "article.markdown-body a[href]",
+      "use_selenium": true
+    },
+    {
+      "url": "https://github.com/fastfire/deepdarkCTI/blob/main/telegram_infostealer.md",
+      "selector": "article.markdown-body a[href]",
+      "use_selenium": true
+    },
+    {
+      "url": "https://www.breachsense.com/telegram-channels/",
+      "selector": "tr a[href]",
+      "use_selenium": false
+    }
+  ]
+}
