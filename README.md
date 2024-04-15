@@ -1,5 +1,6 @@
 # TeleScrape 
 **Enhanced Telegram Channel Scraper using TOR and a Flask Dashboard for results**
+Currently, tested and run on Ubuntu 22.04.4 LTS
 
 ## Legal Disclaimer
 This software is designed solely for **educational and research purposes** and should be used with ethical considerations in mind. Users are responsible for ensuring their activities comply with local laws and regulations. The authors of this software bear no responsibility for any misuse or potential damages arising from its use. It's imperative to adhere to the terms of service of any platforms interacted with through this tool.
