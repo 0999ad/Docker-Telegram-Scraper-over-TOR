@@ -1,6 +1,3 @@
-#keywords to be scraped
-#Example:
-
 co.uk
 france
 leaked
