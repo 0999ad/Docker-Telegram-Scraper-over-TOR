@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 TeleScrape Version 6.0 (Production): An advanced web scraping tool designed for extracting content
-from Telegram channels. This version introduces asynchronous scraping, configurable targets via
+from Telegram channels. This version introduces asynchronous scraping and configurable targets via
 a JSON file, and database integration for result storage, alongside Docker support for easy deployment.
 New in this version:
 - Asynchronous web scraping for improved performance,
