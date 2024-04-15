@@ -1,20 +1,54 @@
 # Use an official Python runtime as a parent image
-FROM python:3.9-slim
+FROM python:3.8-slim
 
-# Set the working directory in the container
+# Set environment variables to avoid UI prompts during installations
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install necessary OS utilities and dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    unzip \
+    tor \
+    curl \
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Google Chrome to the repositories
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list
+
+# Install Google Chrome
+RUN apt-get update && apt-get install -y google-chrome-stable
+
+# Download and install ChromeDriver
+RUN wget --verbose https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.122/linux64/chromedriver-linux64.zip \
+    && unzip -o chromedriver-linux64.zip -d /usr/local/bin/ \
+    && chmod +x /usr/local/bin/chromedriver-linux64/chromedriver \
+    && mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
+    && rm -rf chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
+
+# Set the working directory to /app
 WORKDIR /app
 
 # Copy the current directory contents into the container at /app
 COPY . /app
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies
+RUN pip install flask selenium beautifulsoup4 requests
 
 # Make port 8081 available to the world outside this container
 EXPOSE 8081
 
+# Copy entrypoint script into the container
+COPY entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # Define environment variable
 ENV NAME TeleScrape
 
-# Run app.py when the container launches
-CMD ["python", "TeleScrape_v6.py"]
+# Set the entrypoint script to initialize environment
+ENTRYPOINT ["entrypoint.sh"]
+
+# Command to run the Flask app
+CMD ["python", "TeleScrape.py"]
