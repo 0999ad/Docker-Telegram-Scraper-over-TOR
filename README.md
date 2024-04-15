@@ -1,5 +1,6 @@
 # TeleScrape 
 **Enhanced Telegram Channel Scraper using TOR and a Flask Dashboard for results**
+
 Currently, tested and run on Ubuntu 22.04.4 LTS
 
 ## Legal Disclaimer
