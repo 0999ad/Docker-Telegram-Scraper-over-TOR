@@ -1,1 +1,7 @@
-keywords to be scraped
+#keywords to be scraped
+#Example:
+
+co.uk
+france
+leaked
+breach
