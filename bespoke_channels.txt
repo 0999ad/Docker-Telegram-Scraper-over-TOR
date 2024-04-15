@@ -1,6 +1,3 @@
-# Extra channels can be added here 
-# Example:
-
 https://t.me/miragelogscloud
 https://t.me/mooncloudfree
 https://t.me/powercloudlogs
