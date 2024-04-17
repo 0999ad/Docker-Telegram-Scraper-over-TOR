@@ -42,9 +42,10 @@ Follow these steps to get TeleScrape up and running on your machine:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/TeleScrape.git
-   cd TeleScrape
+   git clone https://github.com/yourusername/Docker-Telegram-Scraper-over-TOR
+   cd Docker-Telegram-Scraper-over-TOR/
    ```
+Rename your Dockerfile to reflect your OS Distro
 
 2. **Build the Docker image:**
    ```bash
