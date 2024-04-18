@@ -49,13 +49,19 @@ Rename your Dockerfile to reflect your OS Distro
 
 2. **Build the Docker image:**
    ```bash
-   docker build -t telescraper .
+   sudo docker build -t telescraper .
    ```
 
 3. **Run the Docker container:**
    ```bash
-   docker run -p 8081:8081 telescraper
+   sudo docker run -p 8081:8081 telescraper
    ```
+if you encounter an issue try the following
+```bash
+   sudo docker run -p 8081:8081 -v $(pwd):/app telescraper
+   ```
+
+
 
    This command runs the application and makes it accessible via localhost on port 8081.
 
