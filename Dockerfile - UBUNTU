@@ -21,11 +21,11 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add
 # Install Google Chrome
 RUN apt-get update && apt-get install -y google-chrome-stable
 
-# Download and install ChromeDriver
-RUN wget --verbose https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.122/linux64/chromedriver-linux64.zip \
+# Download and install ChromeDriver for Chrome 126
+RUN wget --verbose https://storage.googleapis.com/chrome-for-testing-public/126.0.6478.61/linux64/chromedriver-linux64.zip \
     && unzip -o chromedriver-linux64.zip -d /usr/local/bin/ \
-    && chmod +x /usr/local/bin/chromedriver-linux64/chromedriver \
-    && mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
+    && mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/ \
+    && chmod +x /usr/local/bin/chromedriver \
     && rm -rf chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
 
 # Set the working directory to /app
@@ -48,7 +48,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 ENV NAME TeleScrape
 
 # Set the entrypoint script to initialize environment
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # Command to run the Flask app
 CMD ["python", "TeleScrape.py"]
