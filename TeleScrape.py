@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
+
 """
-TeleScrape Version 6.0 (Production): A sophisticated web scraping tool designed for extracting content
-from Telegram channels, with enhanced privacy features through Tor network integration,
-a dashboard for displaying results, including matched content based on specified keywords,
-extended functionality to keep running until manually stopped, ensuring the Flask dashboard remains live
-for result review, and adding functionality to manually restart the scrape from the dashboard and to update keywords.
+TeleScrape Version 6.1 (BETA): An advanced web scraping tool designed for extracting content
+from Telegram channels. This version includes enhanced privacy features with Tor network integration,
+a responsive dashboard for displaying results, and functionality for dynamically updating keywords.
+New in this version:
+- Configurable multi-site scraping with simple URL and selector setup,
+- Enhanced error handling and logging capabilities,
+- Use of Selenium for dynamic content sites like GitHub,
+- Duplicate link removal before scraping,
+- Improved system stability and performance optimization,
+- Real-time updates on the dashboard using WebSocket,
+- Advanced keyword matching using NLP techniques,
+- Improved user feedback and real-time status updates.
 
 Usage:
   python TeleScrape.py
 """
+
 import time
 import requests
 from bs4 import BeautifulSoup
@@ -25,8 +34,13 @@ from selenium.webdriver.chrome.options import Options
 import concurrent.futures
 from threading import Thread, Lock
 import traceback
+from flask_socketio import SocketIO, emit
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
 
 app = Flask(__name__, template_folder='templates')
+socketio = SocketIO(app, async_mode='threading')
+nltk.download('vader_lexicon')
 
 links_info = {'count': 0, 'filename': ''}
 results = []
@@ -35,6 +49,8 @@ lock = Lock()
 tor_status = {'connected': False, 'ip_address': 'N/A'}
 results_filename = ""
 scraping_in_progress = Lock()
+scrape_start_time = None
+scrape_end_time = None
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s:%(levelname)s:%(message)s',
@@ -45,18 +61,12 @@ logging.basicConfig(level=logging.INFO,
 
 def setup_chrome_with_tor():
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run Chrome headlessly
-    chrome_options.add_argument("--no-sandbox")  # Bypass OS security model
-    chrome_options.add_argument("--disable-gpu")  # Disable GPU hardware acceleration
-    chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
-    chrome_options.add_argument("--window-size=1920x1080")  # Set window size
-    chrome_options.add_argument("--proxy-server=socks5://localhost:9050")  # Use SOCKS5 proxy for Tor
-
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--proxy-server=socks5://localhost:9050")
     chromedriver_path = "/usr/local/bin/chromedriver"
     chrome_service = Service(executable_path=chromedriver_path)
     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
     return driver
-
 
 def verify_tor_connection():
     session = requests.session()
@@ -86,8 +96,14 @@ def read_keywords_from_file(file_path):
 def read_bespoke_channels():
     try:
         with open('bespoke_channels.txt', 'r') as file:
-            return [line.strip() for line in file if line.strip()]
+            channels = [line.strip() for line in file if line.strip()]
+            logging.info(f"Read {len(channels)} bespoke channels from file.")
+            return channels
     except FileNotFoundError:
+        logging.error("Bespoke channels file not found.")
+        return []
+    except Exception as e:
+        logging.error(f"Failed to read bespoke channels: {e}")
         return []
 
 def write_bespoke_channels(channels):
@@ -95,40 +111,78 @@ def write_bespoke_channels(channels):
         for channel in channels:
             file.write(f"{channel}\n")
 
+sites_to_scrape = [
+    {
+        "url": "https://github.com/fastfire/deepdarkCTI/blob/main/telegram_threat_actors.md",
+        "selector": "article.markdown-body a[href]",
+        "use_selenium": True
+    },
+    {
+        "url": "https://github.com/fastfire/deepdarkCTI/blob/main/telegram_infostealer.md",
+        "selector": "article.markdown-body a[href]",
+        "use_selenium": True
+    },
+    {
+        "url": "https://www.breachsense.com/telegram-channels/",
+        "selector": "tr a[href]",
+        "use_selenium": False
+    }
+]
+def fetch_links_from_site(url, selector, use_selenium=False):
+    try:
+        if use_selenium:
+            driver = setup_chrome_with_tor()
+            driver.get(url)
+            time.sleep(5)  # Wait for the page to load fully
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            driver.quit()
+        else:
+            response = requests.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+        links = [a['href'] for a in soup.select(selector) if "https://t.me/" in a['href']]
+        return links
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching {url}: {e}")
+        return []
+    except WebDriverException as e:
+        logging.error(f"Selenium error with {url}: {e}")
+        return []
+
 def create_links_file():
     global links_info
-    all_filtered_links = read_bespoke_channels()  # Start with bespoke channels
-    github_urls = [
-        "https://github.com/fastfire/deepdarkCTI/blob/main/telegram_threat_actors.md",
-        "https://github.com/fastfire/deepdarkCTI/blob/main/telegram_infostealer.md"
-    ]
-    driver = setup_chrome_with_tor()
-    try:
-        for github_url in github_urls:
-            logging.info(f"Fetching links from {github_url}...")
-            driver.get(github_url)
-            time.sleep(5)
+    bespoke_channels = read_bespoke_channels()
+    all_links = bespoke_channels[:]  # Copy bespoke channels to all_links
+    logging.info(f"Initial links from bespoke channels: {len(bespoke_channels)}")
 
-            page_source = driver.page_source
-            soup = BeautifulSoup(page_source, "html.parser")
-            links = soup.find_all("a", href=True)
-            filtered_links = [link["href"] for link in links if "https://t.me/" in link["href"]]
-            all_filtered_links.extend(filtered_links)
-    except Exception as e:
-        logging.error(f"Error fetching links from {github_url}: {e}")
-    finally:
-        driver.quit()
+    for site in sites_to_scrape:
+        logging.info(f"Fetching links from {site['url']}...")
+        site_links = fetch_links_from_site(site['url'], site['selector'], site.get('use_selenium', False))
+        all_links.extend(site_links)
+        logging.info(f"Added {len(site_links)} links from {site['url']}.")
 
+    # Log before deduplication
+    logging.info(f"Total links before deduplication: {len(all_links)}")
+    logging.debug(f"Links before deduplication: {all_links}")
+
+    # Remove duplicates by converting to a set and back to a list
+    unique_links = list(set(all_links))
+
+    # Log after deduplication
+    logging.info(f"Total unique links after deduplication: {len(unique_links)}")
+    logging.debug(f"Unique links: {unique_links}")
+
+    links_info['count'] = len(unique_links)
     current_datetime = get_current_datetime_formatted()
     links_filename = f"{current_datetime}-links.txt"
-    links_info['count'] = len(all_filtered_links)
     links_info['filename'] = links_filename
 
     with open(links_filename, "w") as file:
-        for link in all_filtered_links:
+        for link in unique_links:
             file.write(f"{link}\n")
-    logging.info(f"Found {len(all_filtered_links)} links in total and saved them to '{links_filename}'")
-    return all_filtered_links
+    logging.info(f"Found {links_info['count']} unique links in total and saved them to '{links_filename}'")
+    return unique_links
+
 
 def create_results_file():
     global results_filename
@@ -140,6 +194,7 @@ def create_results_file():
 
 def scrape_channel(channel_url, keywords):
     driver = setup_chrome_with_tor()
+    sia = SentimentIntensityAnalyzer()
     try:
         channel_url_preview = channel_url if channel_url.startswith("https://t.me/s/") else channel_url.replace(
             "https://t.me/", "https://t.me/s/")
@@ -157,17 +212,21 @@ def scrape_channel(channel_url, keywords):
                     start_index = max(text.lower().find(keyword.lower()) - 200, 0)
                     end_index = min(start_index + 200 + len(keyword), len(text))
                     context = text[start_index:end_index]
-                    match_message = f"Keyword Match '{keyword}' found in {channel_url}: ...{context}..."
+                    sentiment = sia.polarity_scores(context)
+                    match_message = f"Keyword Match '{keyword}' found in {channel_url}: ...{context}... Sentiment: {sentiment}"
                     with lock:
                         results.append(match_message)
                         with open(results_filename, 'a') as file:
                             file.write(f"{match_message}\n*****\n\n")
                     logging.info(match_message)
+                    socketio.emit('new_result', {'message': match_message})
                     break  # Break after the first keyword match per element
     except TimeoutException:
         logging.warning(f"Timed out waiting for page to load: {channel_url}")
+        socketio.emit('error', {'message': f"Timed out waiting for page to load: {channel_url}"})
     except Exception as e:
         logging.error(f"Error scraping {channel_url}: {e}")
+        socketio.emit('error', {'message': f"Error scraping {channel_url}: {e}"})
     finally:
         driver.quit()
 
@@ -183,19 +242,27 @@ def start_scraping():
     if scraping_in_progress.locked():
         logging.info("Scraping process is already running and cannot be started again.")
         return
+    global scrape_start_time, scrape_end_time
     with scraping_in_progress:
         global results, links_info, results_filename
         with lock:
             results.clear()
             links_info = {'count': 0, 'filename': ''}
         logging.info("Starting new scrape with current keywords.")
+        scrape_start_time = get_current_datetime_formatted()
         keywords = keywords_searched
         links = create_links_file()
         create_results_file()
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(scrape_channel, link, keywords) for link in links]
             concurrent.futures.wait(futures)
+        scrape_end_time = get_current_datetime_formatted()
         logging.info("Scraping process completed.")
+        socketio.emit('scrape_complete', {
+            'start_time': scrape_start_time,
+            'end_time': scrape_end_time,
+            'total_links': links_info['count']
+        })
 
 @app.route('/update-keywords', methods=['POST'])
 def update_keywords():
@@ -230,6 +297,8 @@ def dashboard():
                            tor_connected=tor_status['connected'],
                            tor_ip=tor_status['ip_address'],
                            results_filename=results_filename,
+                           scrape_start_time=scrape_start_time,
+                           scrape_end_time=scrape_end_time,
                            warning_message="Warning: The information displayed is live and could contain offensive or malicious language.")
 
 @app.after_request
@@ -237,8 +306,17 @@ def add_header(response):
     response.headers['Cache-Control'] = 'no-store'
     return response
 
+@socketio.on('connect')
+def test_connect():
+    logging.info('Client connected')
+    emit('response', {'data': 'Connected'})
+
+@socketio.on('disconnect')
+def test_disconnect():
+    logging.info('Client disconnected')
+
 def run_flask_app():
-    app.run(debug=True, host='0.0.0.0', port=8081, use_reloader=False)
+    socketio.run(app, debug=True, host='0.0.0.0', port=8081, use_reloader=False)
 
 def main():
     start_time = time.time()
@@ -270,3 +348,4 @@ if __name__ == "__main__":
     flask_thread = Thread(target=run_flask_app, daemon=True)
     flask_thread.start()
     main()
+
