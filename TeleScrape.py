@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-
 """
-TeleScrape Version 6.1 (BETA): An advanced web scraping tool designed for extracting content
+TeleScrape Version 6.2 (BETA): An advanced web scraping tool designed for extracting content
 from Telegram channels. This version includes enhanced privacy features with Tor network integration,
 a responsive dashboard for displaying results, and functionality for dynamically updating keywords.
 New in this version:
@@ -13,6 +12,12 @@ New in this version:
 - Real-time updates on the dashboard using WebSocket,
 - Advanced keyword matching using NLP techniques,
 - Improved user feedback and real-time status updates.
+.___________.  _______      _______.        _______.  ______ .______          ___      .______    _______ .______
+|           | /  _____|    /       |       /       | /      ||   _  \        /   \     |   _  \  |   ____||   _  \
+`---|  |----`|  |  __     |   (----`      |   (----`|  ,----'|  |_)  |      /  ^  \    |  |_)  | |  |__   |  |_)  |
+    |  |     |  | |_ |     \   \           \   \    |  |     |      /      /  /_\  \   |   ___/  |   __|  |      /
+    |  |     |  |__| | .----)   |      .----)   |   |  `----.|  |\  \----./  _____  \  |  |      |  |____ |  |\  \----.
+    |__|      \______| |_______/       |_______/     \______|| _| `._____/__/     \__\ | _|      |_______|| _| `._____|
 
 Usage:
   python TeleScrape.py
@@ -96,14 +101,8 @@ def read_keywords_from_file(file_path):
 def read_bespoke_channels():
     try:
         with open('bespoke_channels.txt', 'r') as file:
-            channels = [line.strip() for line in file if line.strip()]
-            logging.info(f"Read {len(channels)} bespoke channels from file.")
-            return channels
+            return [line.strip() for line in file if line.strip()]
     except FileNotFoundError:
-        logging.error("Bespoke channels file not found.")
-        return []
-    except Exception as e:
-        logging.error(f"Failed to read bespoke channels: {e}")
         return []
 
 def write_bespoke_channels(channels):
@@ -151,27 +150,14 @@ def fetch_links_from_site(url, selector, use_selenium=False):
 
 def create_links_file():
     global links_info
-    bespoke_channels = read_bespoke_channels()
-    all_links = bespoke_channels[:]  # Copy bespoke channels to all_links
-    logging.info(f"Initial links from bespoke channels: {len(bespoke_channels)}")
-
+    all_links = read_bespoke_channels()  # Start with bespoke channels
     for site in sites_to_scrape:
         logging.info(f"Fetching links from {site['url']}...")
         site_links = fetch_links_from_site(site['url'], site['selector'], site.get('use_selenium', False))
         all_links.extend(site_links)
-        logging.info(f"Added {len(site_links)} links from {site['url']}.")
-
-    # Log before deduplication
-    logging.info(f"Total links before deduplication: {len(all_links)}")
-    logging.debug(f"Links before deduplication: {all_links}")
 
     # Remove duplicates by converting to a set and back to a list
     unique_links = list(set(all_links))
-
-    # Log after deduplication
-    logging.info(f"Total unique links after deduplication: {len(unique_links)}")
-    logging.debug(f"Unique links: {unique_links}")
-
     links_info['count'] = len(unique_links)
     current_datetime = get_current_datetime_formatted()
     links_filename = f"{current_datetime}-links.txt"
@@ -182,7 +168,6 @@ def create_links_file():
             file.write(f"{link}\n")
     logging.info(f"Found {links_info['count']} unique links in total and saved them to '{links_filename}'")
     return unique_links
-
 
 def create_results_file():
     global results_filename
@@ -348,4 +333,3 @@ if __name__ == "__main__":
     flask_thread = Thread(target=run_flask_app, daemon=True)
     flask_thread.start()
     main()
-
